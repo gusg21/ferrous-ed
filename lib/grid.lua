@@ -15,14 +15,14 @@ end
 ---------------------------------------------------------------------------------------------------
 -- Gets the value of a single cell
 function Grid:get(x,y)
-    return self.cells[x] and self.cells[x][y]
+    return self.cells[y] and self.cells[y][x]
 end
 
 ---------------------------------------------------------------------------------------------------
 -- Sets the value of a single cell
 function Grid:set(x,y,value)
-    if not self.cells[x] then self.cells[x] = {} end
-    self.cells[x][y] = value
+    if not self.cells[y] then self.cells[y] = {} end
+    self.cells[y][x] = value
 end
 
 ---------------------------------------------------------------------------------------------------
