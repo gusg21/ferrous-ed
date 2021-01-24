@@ -44,7 +44,8 @@ local ferrous = {
         {
             return palette[int(Texel(texture,texture_coords).r*4)];
         }
-        ]])
+        ]]),
+    selectedTile = 0
 }
 
 function love.load()
@@ -103,7 +104,7 @@ function love.draw()
         for x = 0, ferrous.nametable.width-1 do
             local byte = ferrous.nametable:get(x, y)
 
-            print(math.floor(y / 2) * 16 + math.floor(x / 2))
+            -- print(math.floor(y / 2) * 16 + math.floor(x / 2))
             ferrous.paletteSwapShader:send("palette", unpack(ferrous.palettes[ferrous.attributeTable[math.floor(y / 2) * 16 + math.floor(x / 2)]+1]))
             ferrous.pattern:draw(byte, x * 8, y * 8, nil)
         end
@@ -113,7 +114,16 @@ function love.draw()
     love.graphics.pop()
 
 	love.graphics.setColor(1, 1, 1, 1)
-	loveframes.draw()
+    loveframes.draw()
+    
+    local gfxw, gfxh = love.graphics.getDimensions()
+    local fpw = ferrous.pattern:getWidth() * 2
+    local fph = ferrous.pattern:getHeight() * 2
+    love.graphics.rectangle("fill", gfxw - fpw - 3, gfxh - fph - 3, fpw + 6, fph + 6)
+    love.graphics.draw(ferrous.pattern:getImage(), gfxw - fpw, gfxh - fph, nil, 2, 2)
+    love.graphics.setColor(0.9, 0.1, 0.1, 1)
+    love.graphics.setLineWidth(3)
+    love.graphics.rectangle("line", gfxw - fpw + (ferrous.selectedTile % 16) * 16, gfxh - fph + math.floor(ferrous.selectedTile / 16) * 16, 16, 16)
 end
 
 function love.mousepressed(x, y, button)
@@ -125,6 +135,14 @@ function love.mousepressed(x, y, button)
 
         ferrous.initialDragMouse.x = x
         ferrous.initialDragMouse.y = y
+    end
+
+    local gfxw, gfxh = love.graphics.getDimensions()
+    local fpw = ferrous.pattern:getWidth() * 2
+    local fph = ferrous.pattern:getHeight() * 2
+    if (x > gfxw - fpw and y > gfxh - fph) then
+        ferrous.selectedTile = math.floor((love.mouse.getX() - (gfxw - fpw)) / 16) + math.floor((love.mouse.getY() - (gfxh - fph)) / 16) * 16
+        print(ferrous.selectedTile)
     end
 end
 

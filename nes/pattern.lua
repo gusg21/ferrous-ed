@@ -7,6 +7,11 @@ function Pattern:initialize(image, srcPalette)
     self.srcPalette = srcPalette 
 end
 
+function Pattern:getWidth() return self.image:getWidth() end
+function Pattern:getHeight() return self.image:getHeight() end
+
+function Pattern:getImage() return self.image end
+
 function Pattern:draw(byte, x, y, palette)
     local quad = love.graphics.newQuad(byte % 16 * 8, math.floor(byte / 16) * 8, 8, 8, 128, 128)
 
