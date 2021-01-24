@@ -1,6 +1,6 @@
-local loveframes = require("LoveFrames")
 local Grid = require("lib.grid")
 local Pattern = require("nes.pattern")
+local ToolBtn = require("toolbtn")
 
 local ferrous = {
     -- NES
@@ -34,8 +34,10 @@ local ferrous = {
     export = function ()
         print("EXPORT")
     end,
-    toolbar = nil,
-    camera = {x = 0, y = 0},
+    camera = {x = 0, y = 0, zoom = 3, 
+    toWorld = function (self, x, y)
+        return (x - self.x) / self.zoom, (y - self.y) / self.zoom
+    end},
     initialDragMouse = {x = 0, y = 0},
     initialDragCamera = {x = 0, y = 0},
     paletteSwapShader = love.graphics.newShader([[
@@ -45,24 +47,19 @@ local ferrous = {
             return palette[int(Texel(texture,texture_coords).r*4)];
         }
         ]]),
-    selectedTile = 0
+    selectedTile = 0,
+    toolBtns = {},
 }
 
 function love.load()
     love.graphics.setDefaultFilter("nearest", "nearest")
     love.graphics.setBackgroundColor(0.1, 0.1, 0.2)
 
-    -- UI
-    ferrous.toolbar = loveframes.Create("panel")
-    ferrous.toolbar:SetSize(love.graphics.getWidth(), 35)
-    ferrous.toolbar:SetPos(0, 0)
-
-    local exportBtn = loveframes.Create("button", ferrous.toolbar)
-    exportBtn:SetText("Export")
-    exportBtn:SetPos(ferrous.padding, ferrous.padding)
-    exportBtn.OnClick = function (obj, x, y)
-        ferrous.export()
-    end
+    ferrous.toolBtns = {
+        ToolBtn:new("res/draw.png", 10, 10, "draw", "p"),
+        ToolBtn:new("res/move.png", 10, 45, "move", "m"),
+        ToolBtn:new("res/save.png", 10, 80, "save", "s"),
+    }
 
     -- NAMETABLE
     ferrous.nametable = Grid:new()
@@ -71,7 +68,7 @@ function love.load()
             ferrous.nametable:set(x, y, 0)
         end
     end
-    ferrous.nametable:set(31, 29, 1)
+    -- ferrous.nametable:set(31, 29, 1)
     ferrous.nametable.width = 32
     ferrous.nametable.height = 30
 
@@ -82,24 +79,37 @@ function love.load()
     for i = 0, 240-1 do
         ferrous.attributeTable[i] = 0
     end
-    ferrous.attributeTable[239] = 1
+    -- ferrous.attributeTable[239] = 1
 end
 
 function love.update(dt)
-    loveframes.update(dt)
-    
-    if (ferrous.initialDragCamera and ferrous.initialDragMouse and love.mouse.isDown(1)) then
+    -- CAMERA MOVING
+    if (ferrous.initialDragCamera and ferrous.initialDragMouse and love.mouse.isDown(1) and ToolBtn.static.tool == "move") then
         ferrous.camera.x = ferrous.initialDragCamera.x + (love.mouse.getX() - ferrous.initialDragMouse.x)
         ferrous.camera.y = ferrous.initialDragCamera.y + (love.mouse.getY() - ferrous.initialDragMouse.y)
+    end
+
+    -- NAMETABLE EDITING
+    local mx, my = ferrous.camera:toWorld(love.mouse.getX(), love.mouse.getY())
+    if (mx > 0 and mx < ferrous.nametable.width * 8 and 
+            my > 0 and my < ferrous.nametable.height * 8 and ToolBtn.static.tool == "draw") then
+        local tx = math.floor(mx / 8)
+        local ty = math.floor(my / 8)
+
+        if (love.mouse.isDown(1)) then
+            ferrous.nametable:set(tx, ty, ferrous.selectedTile)
+        elseif (love.mouse.isDown(2)) then
+            ferrous.selectedTile = ferrous.nametable:get(tx, ty)
+        end
     end
 end
 
 function love.draw()
+    -- NAMETABLE
     love.graphics.push()
     love.graphics.translate(ferrous.camera.x, ferrous.camera.y)
-    love.graphics.scale(2, 2)
+    love.graphics.scale(ferrous.camera.zoom, ferrous.camera.zoom)
     love.graphics.setShader(ferrous.paletteSwapShader)
-
     for y = 0, ferrous.nametable.height-1 do
         for x = 0, ferrous.nametable.width-1 do
             local byte = ferrous.nametable:get(x, y)
@@ -109,13 +119,16 @@ function love.draw()
             ferrous.pattern:draw(byte, x * 8, y * 8, nil)
         end
     end
-
     love.graphics.setShader()
     love.graphics.pop()
 
-	love.graphics.setColor(1, 1, 1, 1)
-    loveframes.draw()
+    -- BUTTONS
+    for i,v in ipairs(ferrous.toolBtns) do
+        v:draw()
+    end
+    love.graphics.setColor(1, 1, 1, 1)
     
+    -- PATTERN SELECTOR
     local gfxw, gfxh = love.graphics.getDimensions()
     local fpw = ferrous.pattern:getWidth() * 2
     local fph = ferrous.pattern:getHeight() * 2
@@ -124,12 +137,17 @@ function love.draw()
     love.graphics.setColor(0.9, 0.1, 0.1, 1)
     love.graphics.setLineWidth(3)
     love.graphics.rectangle("line", gfxw - fpw + (ferrous.selectedTile % 16) * 16, gfxh - fph + math.floor(ferrous.selectedTile / 16) * 16, 16, 16)
+
+    -- print(ferrous.camera:toWorld(love.mouse.getX(), love.mouse.getY()))
 end
 
 function love.mousepressed(x, y, button)
-    loveframes.mousepressed(x, y, button)
-    
-    if (button == 1) then
+    for _,v in pairs(ferrous.toolBtns) do
+        v:mousepressed(x, y)
+    end
+
+    -- PANNING
+    if (button == 1 and ToolBtn.static.tool == "move") then
         ferrous.initialDragCamera.x = ferrous.camera.x
         ferrous.initialDragCamera.y = ferrous.camera.y
 
@@ -137,31 +155,21 @@ function love.mousepressed(x, y, button)
         ferrous.initialDragMouse.y = y
     end
 
+    -- Pattern selection
     local gfxw, gfxh = love.graphics.getDimensions()
     local fpw = ferrous.pattern:getWidth() * 2
     local fph = ferrous.pattern:getHeight() * 2
     if (x > gfxw - fpw and y > gfxh - fph) then
-        ferrous.selectedTile = math.floor((love.mouse.getX() - (gfxw - fpw)) / 16) + math.floor((love.mouse.getY() - (gfxh - fph)) / 16) * 16
+        ferrous.selectedTile = math.floor((x - (gfxw - fpw)) / 16) + math.floor((y - (gfxh - fph)) / 16) * 16
         print(ferrous.selectedTile)
     end
 end
 
-function love.mousereleased(x, y, button)
-	loveframes.mousereleased(x, y, button)
+function love.keypressed(key, scancode, isRepeat)
+    for _,v in pairs(ferrous.toolBtns) do
+        v:keypressed(key)
+    end
 end
 
-function love.wheelmoved(x, y)
-	loveframes.wheelmoved(x, y)
-end
-
-function love.keypressed(key, isrepeat)
-	loveframes.keypressed(key, isrepeat)
-end
-
-function love.keyreleased(key)
-	loveframes.keyreleased(key)
-end
-
-function love.textinput(text)
-    loveframes.textinput(text)
+function love.quit()
 end
